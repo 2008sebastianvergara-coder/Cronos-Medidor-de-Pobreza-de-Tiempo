@@ -3,32 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_PROMPT } from "../constants";
 import { UserProfile, SimulationResult } from "../types";
 
-// Helper para obtener la API Key de forma segura, evitando errores de "process is not defined"
-// si la app corre en un entorno de navegador sin polyfills.
-const getApiKey = () => {
-    try {
-        // @ts-ignore
-        if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-            // @ts-ignore
-            return process.env.API_KEY;
-        }
-    } catch (e) {
-        console.warn("Entorno no soporta process.env", e);
-    }
-    return undefined;
-};
-
-const getClient = () => {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-        console.error("CRITICAL: API_KEY not found. Ensure process.env.API_KEY is configured.");
-        throw new Error("API Key not found");
-    }
-    return new GoogleGenAI({ API_KEY });
-};
+// Inicialización directa con la variable de entorno, como se solicitó.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getPolicyRecommendations = async (user: UserProfile, results: SimulationResult): Promise<string> => {
-  const ai = getClient();
   
   // Prompt mejorado para incluir recomendaciones personales y públicas
   const promptText = `
@@ -99,7 +77,6 @@ export const getPolicyRecommendations = async (user: UserProfile, results: Simul
 };
 
 export const chatWithCronos = async (history: {role: string, content: string}[], message: string): Promise<string> => {
-    const ai = getClient();
     
     const chatPrompt = `
     ${SYSTEM_PROMPT}

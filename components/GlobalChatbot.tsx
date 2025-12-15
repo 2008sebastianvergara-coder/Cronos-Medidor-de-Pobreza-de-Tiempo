@@ -72,7 +72,7 @@ const GlobalChatbot: React.FC = () => {
                 </div>
                 <div>
                     <h3 class="font-bold text-lg leading-tight font-serif">Cronos AI</h3>
-                    <p class="text-[10px] text-indigo-100 opacity-90">Tu coach anti-estrés</p>
+                    <p class="text-[10px] text-indigo-100 opacity-90">Tu consultor de tiempo</p>
                 </div>
             </div>
             <button onClick={() => setIsOpen(false)} class="hover:bg-white/20 p-1.5 rounded-full transition-colors">
