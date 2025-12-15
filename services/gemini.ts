@@ -4,7 +4,7 @@ import { SYSTEM_PROMPT } from "../constants";
 import { UserProfile, SimulationResult } from "../types";
 
 // Inicialización directa con la variable de entorno, como se solicitó.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
 export const getPolicyRecommendations = async (user: UserProfile, results: SimulationResult): Promise<string> => {
   
