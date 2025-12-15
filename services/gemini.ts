@@ -3,19 +3,35 @@ import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_PROMPT } from "../constants";
 import { UserProfile, SimulationResult } from "../types";
 
+// Helper para obtener la API Key de forma segura, evitando errores de "process is not defined"
+// si la app corre en un entorno de navegador sin polyfills.
+const getApiKey = () => {
+    try {
+        // @ts-ignore
+        if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+            // @ts-ignore
+            return process.env.API_KEY;
+        }
+    } catch (e) {
+        console.warn("Entorno no soporta process.env", e);
+    }
+    return undefined;
+};
+
 const getClient = () => {
-    if (!process.env.API_KEY) {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+        console.error("CRITICAL: API_KEY not found. Ensure process.env.API_KEY is configured.");
         throw new Error("API Key not found");
     }
-    return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+    return new GoogleGenAI({ apiKey });
 };
 
 export const getPolicyRecommendations = async (user: UserProfile, results: SimulationResult): Promise<string> => {
-  try {
-    const ai = getClient();
-    
-    // Prompt mejorado para incluir recomendaciones personales y públicas
-    const prompt = `
+  const ai = getClient();
+  
+  // Prompt mejorado para incluir recomendaciones personales y públicas
+  const promptText = `
     Actúa como un coach de vida y consultor en economía del bienestar.
     
     Perfil: ${user.gender}, ${user.age} años, ${user.childrenUnder12} hijos.
@@ -39,46 +55,71 @@ export const getPolicyRecommendations = async (user: UserProfile, results: Simul
     Propón 2 medidas sistémicas que el usuario debería exigir o conocer (Leyes de cuidado, flexibilidad laboral garantizada, etc).
     `;
 
+  try {
+    // Intento 1: Configuración estándar con systemInstruction estructurado
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [
-        { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-        { role: 'user', parts: [{ text: prompt }] }
-      ],
+      contents: {
+        role: 'user',
+        parts: [{ text: promptText }]
+      },
       config: {
         temperature: 0.7,
+        systemInstruction: {
+            parts: [{ text: SYSTEM_PROMPT }]
+        },
       }
     });
 
-    return response.text || "No se pudo generar el análisis.";
+    if (response.text) return response.text;
+    throw new Error("Respuesta vacía del modelo");
+
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "Error al conectar con el analista de IA.";
+    console.warn("Intento principal fallido, reintentando con fallback...", error);
+    try {
+        // Fallback: Mover systemPrompt al prompt de usuario si falla la configuración avanzada
+        const fallbackPrompt = `${SYSTEM_PROMPT}\n\n${promptText}`;
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                role: 'user',
+                parts: [{ text: fallbackPrompt }]
+            },
+            config: {
+                temperature: 0.7
+                // Sin systemInstruction para evitar errores de RPC/XHR en ciertos entornos
+            }
+        });
+        return response.text || "No se pudo generar el análisis (Fallback vacío).";
+    } catch (fallbackError) {
+        console.error("Gemini API Error (Fallback):", fallbackError);
+        return "Error al conectar con el analista de IA. Verifica tu conexión a internet o intenta más tarde. (Error: RPC/XHR)";
+    }
   }
 };
 
 export const chatWithCronos = async (history: {role: string, content: string}[], message: string): Promise<string> => {
-    try {
-        const ai = getClient();
-        
-        // Personalidad del Chatbot
-        const chatPrompt = `
-        ${SYSTEM_PROMPT}
-        
-        PERSONALIDAD ACTUALIZADA:
-        Eres "Cronos", una IA carismática, curiosa y un poco filosófica sobre el tiempo ⏳.
-        - Tu objetivo es educar pero siendo SIMPÁTICO y ENTRETENIDO.
-        - Usa emojis de forma natural ✨.
-        - Tus respuestas deben ser BREVES (máximo 2-3 frases cortas).
-        - Si te preguntan algo complejo, simplifícalo con una analogía divertida.
-        - Haz que el usuario se sienta comprendido.
-        `;
+    const ai = getClient();
+    
+    const chatPrompt = `
+    ${SYSTEM_PROMPT}
+    
+    PERSONALIDAD ACTUALIZADA:
+    Eres "Cronos", una IA carismática, curiosa y un poco filosófica sobre el tiempo ⏳.
+    - Tu objetivo es educar pero siendo SIMPÁTICO y ENTRETENIDO.
+    - Usa emojis de forma natural ✨.
+    - Tus respuestas deben ser BREVES (máximo 2-3 frases cortas).
+    - Si te preguntan algo complejo, simplifícalo con una analogía divertida.
+    - Haz que el usuario se sienta comprendido.
+    `;
 
+    try {
+        // Intento 1: Chat estándar con systemInstruction
         const chat = ai.chats.create({
             model: 'gemini-2.5-flash',
             config: {
-                systemInstruction: chatPrompt,
-                temperature: 0.8 // Más creativo y variado
+                systemInstruction: { parts: [{ text: chatPrompt }] },
+                temperature: 0.8 
             },
             history: history.map(h => ({
                 role: h.role === 'user' ? 'user' : 'model',
@@ -89,7 +130,27 @@ export const chatWithCronos = async (history: {role: string, content: string}[],
         const result = await chat.sendMessage({ message });
         return result.text;
     } catch (error) {
-        console.error("Chat Error", error);
-        return "¡Ups! Mi reloj de arena se atascó. ⏳ Intenta de nuevo.";
+        console.warn("Chat Error (Primary), retrying...", error);
+        try {
+            // Fallback: Chat simplificado sin systemInstruction
+            const chat = ai.chats.create({
+                model: 'gemini-2.5-flash',
+                config: {
+                    temperature: 0.8
+                },
+                history: history.map(h => ({
+                    role: h.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: h.content }]
+                }))
+            });
+
+            // Inyectamos la personalidad en el mensaje para este turno
+            const fallbackMessage = `(Contexto Sistema: ${chatPrompt})\n\nUsuario dice: ${message}`;
+            const result = await chat.sendMessage({ message: fallbackMessage });
+            return result.text;
+        } catch (fallbackError) {
+            console.error("Chat Error (Fallback)", fallbackError);
+            return "¡Ups! Mi reloj de arena se atascó. ⏳ Revisa tu conexión.";
+        }
     }
 }
