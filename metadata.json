@@ -1,0 +1,5 @@
+{
+  "name": "Cronos: Medidor de Pobreza de Tiempo",
+  "description": "Una herramienta analítica avanzada para medir la pobreza de tiempo y dimensiones ocultas basada en los modelos LIMTIP, Goodin y Vickery, con recomendaciones de políticas públicas impulsadas por IA.",
+  "requestFramePermissions": []
+}
