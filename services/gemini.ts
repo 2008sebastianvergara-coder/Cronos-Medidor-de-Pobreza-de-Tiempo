@@ -24,7 +24,7 @@ const getClient = () => {
         console.error("CRITICAL: API_KEY not found. Ensure process.env.API_KEY is configured.");
         throw new Error("API Key not found");
     }
-    return new GoogleGenAI({ apiKey });
+    return new GoogleGenAI({ API_KEY });
 };
 
 export const getPolicyRecommendations = async (user: UserProfile, results: SimulationResult): Promise<string> => {
