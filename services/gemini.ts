@@ -7,7 +7,7 @@ const getClient = () => {
     if (!process.env.API_KEY) {
         throw new Error("API Key not found");
     }
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 };
 
 export const getPolicyRecommendations = async (user: UserProfile, results: SimulationResult): Promise<string> => {
